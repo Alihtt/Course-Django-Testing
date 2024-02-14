@@ -1,6 +1,8 @@
 from django.views.generic import TemplateView, View
 from django.shortcuts import render, redirect
 from django.contrib.auth.models import User
+from django.contrib.auth.mixins import LoginRequiredMixin
+from .models import Writer
 from django.contrib import messages
 from .forms import UserRegistrationForm
 
@@ -38,3 +40,9 @@ class UserRegistrationView(View):
             messages.success(request, 'You registered successfully')
             return redirect('home:home')
         return render(request, self.template_name, context={'form': form})
+
+
+class WritersView(LoginRequiredMixin, View):
+    def get(self, request):
+        writers = Writer.objects.all()
+        return render(request, 'home/writers.html', {'writers': writers})
