@@ -7,8 +7,14 @@ from django.contrib import messages
 from .forms import UserRegistrationForm
 
 
-class Home(TemplateView):
+class Home(View):
     template_name = 'home/home.html'
+
+    def get(self, request):
+        if request.user.is_authenticated:
+            return redirect('home:writers')
+        else:
+            return render(request, self.template_name)
 
 
 class About(TemplateView):
