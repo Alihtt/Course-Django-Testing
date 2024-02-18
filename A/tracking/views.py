@@ -1,8 +1,9 @@
-from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from .mixins import LoggingMixin
 
 
 class Home(LoggingMixin, APIView):
     def get(self, request):
-        return Response('Hello')
+        return Response("Hello")
