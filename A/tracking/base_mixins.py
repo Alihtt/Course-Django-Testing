@@ -24,6 +24,8 @@ class BaseLoggingMixin:
                 "user": user,
                 "username_persistent": user.get_username() if user else "Anonymous",
                 "response_ms": self._get_response_ms(),
+                'status_code':response.status_code
+                
             }
         )
         self.handle_log()
