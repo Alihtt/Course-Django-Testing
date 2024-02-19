@@ -1,14 +1,20 @@
+import ast
 import ipaddress
+import logging
 import traceback
 
 from django.utils.timezone import now
 
 from .app_settings import app_settings
 
+logger = logging.getLogger(__name__)
+
 
 class BaseLoggingMixin:
 
     logging_methods = "__all__"
+    sensitive_fields = {}
+    CLEAN_SUBSTITUTE = "******"
 
     def initial(self, request, *args, **kwargs):
         self.log = {"requested_at": now()}
@@ -17,7 +23,12 @@ class BaseLoggingMixin:
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
         if self.should_log(request, response):
-
+            if response.streaming:
+                rendered_content = None
+            elif hasattr(response, "rendered_content"):
+                rendered_content = response.rendered_content
+            else:
+                rendered_content = response.getvalue()
             user = self._get_user(request)
             self.log.update(
                 {
@@ -31,9 +42,14 @@ class BaseLoggingMixin:
                     "username_persistent": user.get_username() if user else "Anonymous",
                     "response_ms": self._get_response_ms(),
                     "status_code": response.status_code,
+                    "query_params": self._clean_data(request.query_params.dict()),
+                    "response": self._clean_data(rendered_content),
                 }
             )
-            self.handle_log()
+            try:
+                self.handle_log()
+            except Exception:
+                logger.exception("API request exception raised!")
         return response
 
     def handle_log(self):
@@ -80,6 +96,29 @@ class BaseLoggingMixin:
         response_timedelta = now() - self.log["requested_at"]
         response_ms = int(response_timedelta.total_seconds() * 1000)
         return max(response_ms, 0)
+
+    def _clean_data(self, data):
+
+        if isinstance(data, dict):
+            SENSITIVE_FIELDS = {"key", "signature", "token", "api", "token", "password"}
+            if self.sensitive_fields:
+                SENSITIVE_FIELDS = SENSITIVE_FIELDS | {
+                    field.lower() for field in self.sensitive_fields
+                }
+
+            for key, value in data.items():
+                try:
+                    value = ast.literal_eval(value)
+                except (ValueError, SyntaxError):
+                    pass
+
+                if isinstance(value, (list, dict)):
+                    data[key] = self._clean_data(value)
+                if key.lower() in SENSITIVE_FIELDS:
+                    data[key] = self.CLEAN_SUBSTITUTE
+        elif isinstance(data, list):
+            return [self._clean_data(d) for d in data]
+        return data
 
     def handle_exception(self, exc):
         response = super().handle_exception(exc)
