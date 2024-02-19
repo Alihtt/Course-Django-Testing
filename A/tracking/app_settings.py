@@ -11,5 +11,9 @@ class AppSetting:
     def PATH_LENGTH(self):
         return self._setting("PATH_LENGTH", 200)
 
+    @property
+    def DECODE_REQUEST_BODY(self):
+        return self._setting("DECODE_REQUEST_BODY", True)
+
 
 app_settings = AppSetting("DRF_TRACKING_")

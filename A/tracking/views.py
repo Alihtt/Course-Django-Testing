@@ -5,5 +5,7 @@ from .mixins import LoggingMixin
 
 
 class Home(LoggingMixin, APIView):
-    def get(self, request):
+    sensitive_fields = {"pass"}
+
+    def post(self, request):
         return Response("Hello")

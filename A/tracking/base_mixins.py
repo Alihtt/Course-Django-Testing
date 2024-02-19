@@ -16,8 +16,18 @@ class BaseLoggingMixin:
     sensitive_fields = {}
     CLEAN_SUBSTITUTE = "******"
 
+    def __init__(self, *args, **kwargs) -> None:
+        assert isinstance(
+            self.CLEAN_SUBSTITUTE, str
+        ), "CLEAN_SUBSTITUTE must be a string!"
+        super().__init__(*args, **kwargs)
+
     def initial(self, request, *args, **kwargs):
         self.log = {"requested_at": now()}
+        if not getattr(self, "decode_request_body", app_settings.DECODE_REQUEST_BODY):
+            self.log["data"] = ""
+        else:
+            self.log["data"] = request.data
         return super().initial(request, *args, **kwargs)
 
     def finalize_response(self, request, response, *args, **kwargs):
@@ -116,8 +126,13 @@ class BaseLoggingMixin:
                     data[key] = self._clean_data(value)
                 if key.lower() in SENSITIVE_FIELDS:
                     data[key] = self.CLEAN_SUBSTITUTE
+
         elif isinstance(data, list):
             return [self._clean_data(d) for d in data]
+
+        elif isinstance(data, bytes):
+            return data.decode(errors="replace")
+
         return data
 
     def handle_exception(self, exc):
