@@ -1,6 +1,10 @@
+import ast
+
+from django.contrib.auth.models import User
 from django.test import override_settings
 from rest_framework.test import APIRequestFactory, APITestCase
 
+from tracking.base_mixins import BaseLoggingMixin
 from tracking.models import ApiRequestLog
 
 from .views import MockLoggingView
@@ -91,3 +95,49 @@ class TestLoggingMixin(APITestCase):
         self.client.get("/logging/")
         log = ApiRequestLog.objects.first()
         self.assertEqual(log.status_code, 200)
+
+    def test_log_explicit(self):
+        self.client.get("/explicit-logging/")
+        self.client.post("/explicit-logging/")
+        self.assertEqual(ApiRequestLog.objects.all().count(), 1)
+
+    def test_log_custom_check(self):
+        self.client.get("/custom-check-logging/")
+        self.client.post("/custom-check-logging/")
+        self.assertEqual(ApiRequestLog.objects.all().count(), 1)
+
+    def test_log_anon_user(self):
+        self.client.get("/logging/")
+        log = ApiRequestLog.objects.first()
+        self.assertEqual(log.user, None)
+
+    def test_log_session_auth_user(self):
+        user = User.objects.create_user(username="myname", password="mypass")
+        self.client.login(username="myname", password="mypass")
+        self.client.get("/session-auth-logging/")
+        log = ApiRequestLog.objects.first()
+        self.assertEqual(log.user, user)
+
+    def test_log_params(self):
+        self.client.get("/logging/", {"a": "1234"})
+        log = ApiRequestLog.objects.first()
+        self.assertEqual(ast.literal_eval(log.query_params), {"a": "1234"})
+
+    def test_log_sensitive_fields_params(self):
+        self.client.get(
+            "/sensitive-fields-logging/",
+            {"api": "1234", "detail": "Test", "my_field": "5678"},
+        )
+        log = ApiRequestLog.objects.first()
+        self.assertEqual(
+            ast.literal_eval(log.query_params),
+            {
+                "api": BaseLoggingMixin.CLEAN_SUBSTITUTE,
+                "detail": "Test",
+                "my_field": BaseLoggingMixin.CLEAN_SUBSTITUTE,
+            },
+        )
+
+    def test_log_invalid_clean_substitute(self):
+        with self.assertRaises(AssertionError):
+            self.client.get("/invalid-clean-substitute-logging/")
