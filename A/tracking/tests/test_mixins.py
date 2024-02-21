@@ -1,4 +1,6 @@
 import ast
+import datetime
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.test import override_settings
@@ -141,3 +143,22 @@ class TestLoggingMixin(APITestCase):
     def test_log_invalid_clean_substitute(self):
         with self.assertRaises(AssertionError):
             self.client.get("/invalid-clean-substitute-logging/")
+
+    @mock.patch("tracking.models.ApiRequestLog.save")
+    def test_log_doesnt_fail_if_model_save_failed(self, mock_save):
+        mock_save.side_effect = Exception("db failure")
+        response = self.client.get("/logging/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ApiRequestLog.objects.all().count(), 0)
+
+    @override_settings(USE_TZ=False)
+    @mock.patch("tracking.base_mixins.now")
+    def test_log_doesnt_fail_with_negative_response_ms(self, mock_now):
+        mock_now.side_effect = [
+            datetime.datetime(2019, 1, 1, 10, 0, 10),
+            datetime.datetime(2019, 1, 1, 10, 0, 0),
+        ]
+        response = self.client.get("/logging/")
+        log = ApiRequestLog.objects.first()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(log.response_ms, 0)
